@@ -13,6 +13,7 @@ import (
 )
 
 func main() {
+	const maxMessageLength = 128
 	conn, err := grpc.NewClient("localhost:50051")
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
@@ -36,6 +37,11 @@ func main() {
 		if text == "quit" {
 			break
 		}
+		if len(text) > maxMessageLength {
+			log.Printf("Message too long, max %d characters\n", maxMessageLength)
+			continue
+		}
+
 		_, err = client.PublishMessage(context.Background(), &pb.ChatMessage{
 			Participant: name,
 			Message:     text,

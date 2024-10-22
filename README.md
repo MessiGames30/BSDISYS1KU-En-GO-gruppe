@@ -27,7 +27,7 @@ go run server.go
 
 | System Requirements |  |
 |--|--|
-| R1 |  |
+| R1 | x |
 | R2 |  |
 | R3 |  |
 | R4 |  |
