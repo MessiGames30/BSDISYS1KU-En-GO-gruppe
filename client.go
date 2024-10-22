@@ -8,10 +8,12 @@ import (
 	"time"
 
 	pb "Chitty-Chat_HW3_V2/chittychatpb"
+
 	"google.golang.org/grpc"
 )
 
 func main() {
+	const maxMessageLength = 128
 	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
@@ -34,6 +36,11 @@ func main() {
 		if text == "quit" {
 			break
 		}
+		if len(text) > maxMessageLength {
+			log.Printf("Message too long, max %d characters\n", maxMessageLength)
+			continue
+		}
+
 		_, err = client.PublishMessage(context.Background(), &pb.ChatMessage{
 			Participant: name,
 			Message:     text,
