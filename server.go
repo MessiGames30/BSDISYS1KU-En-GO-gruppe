@@ -4,16 +4,19 @@ import (
 	pb "Chitty-Chat_HW3_V2/chittychatpb" // Import the generated protobuf package
 	"context"
 	"fmt"
-	"google.golang.org/grpc"
 	"log"
 	"net"
 	"sync"
+	"time"
+
+	"google.golang.org/grpc"
 )
 
 type server struct {
 	pb.UnimplementedChittyChatServer
 	participants map[string]int64
-	messages     []*pb.BroadcastMessage
+	messages     []*pb.ChatMessage
+	clients      []pb.ChittyChat_RecieveMessagesServer
 	mu           sync.Mutex
 	logicalClock int64
 }
@@ -27,8 +30,8 @@ func main() {
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterChittyChatServer(grpcServer, &server{
-		participants: make(map[string]int64),
-		messages:     []*pb.BroadcastMessage{},
+		// participants: make(map[string]int64),
+		messages: []*pb.ChatMessage{},
 	})
 
 	fmt.Println("Server is running on port 50051...")
@@ -46,62 +49,70 @@ func (s *server) PublishMessage(ctx context.Context, msg *pb.ChatMessage) (*pb.E
 	s.logicalClock++
 
 	// Broadcast message to all participants
-	broadcast := &pb.BroadcastMessage{
+	broadcast := &pb.ChatMessage{
 		Participant: msg.Participant,
 		Message:     msg.Message,
 		Timestamp:   s.logicalClock,
 	}
 	s.messages = append(s.messages, broadcast)
+	for _, stream := range s.clients {
+		stream.Send(broadcast)
+	}
 
 	log.Printf("Message from %s: %s (Timestamp: %d)", msg.Participant, msg.Message, s.logicalClock)
 	return &pb.Empty{}, nil
 }
 
-// BroadcastMessages - stream messages to connected clients
-func (s *server) BroadcastMessages(_ *pb.Empty, stream pb.ChittyChat_BroadcastMessagesServer) error {
+// RecieveMessages - stream messages to connected clients
+func (s *server) RecieveMessages(_ *pb.Empty, stream pb.ChittyChat_RecieveMessagesServer) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	log.Println("client connected")
 
 	for _, msg := range s.messages {
-		if err := stream.Send(msg); err != nil {
+		err := stream.Send(msg)
+		if err != nil {
 			return err
 		}
 	}
+	s.clients = append(s.clients, stream)
 
-	return nil
+	for {
+		time.Sleep(time.Second)
+	}
 }
 
-// JoinChat - client joins and gets a welcome message with a timestamp
-func (s *server) JoinChat(ctx context.Context, p *pb.Participant) (*pb.JoinLeaveResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// // JoinChat - client joins and gets a welcome message with a timestamp
+// func (s *server) JoinChat(ctx context.Context, p *pb.Participant) (*pb.JoinLeaveResponse, error) {
+// 	s.mu.Lock()
+// 	defer s.mu.Unlock()
 
-	// Increment logical clock on join
-	s.logicalClock++
-	s.participants[p.Name] = s.logicalClock
+// 	// Increment logical clock on join
+// 	s.logicalClock++
+// 	s.participants[p.Name] = s.logicalClock
 
-	message := fmt.Sprintf("Participant %s joined Chitty-Chat at Lamport time %d", p.Name, s.logicalClock)
-	log.Println(message)
+// 	message := fmt.Sprintf("Participant %s joined Chitty-Chat at Lamport time %d", p.Name, s.logicalClock)
+// 	log.Println(message)
 
-	return &pb.JoinLeaveResponse{
-		Message:   message,
-		Timestamp: s.logicalClock,
-	}, nil
-}
+// 	return &pb.JoinLeaveResponse{
+// 		Message:   message,
+// 		Timestamp: s.logicalClock,
+// 	}, nil
+// }
 
-// LeaveChat - client leaves and gets a leave message
-func (s *server) LeaveChat(ctx context.Context, p *pb.Participant) (*pb.JoinLeaveResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// // LeaveChat - client leaves and gets a leave message
+// func (s *server) LeaveChat(ctx context.Context, p *pb.Participant) (*pb.JoinLeaveResponse, error) {
+// 	s.mu.Lock()
+// 	defer s.mu.Unlock()
 
-	s.logicalClock++
-	delete(s.participants, p.Name)
+// 	s.logicalClock++
+// 	delete(s.participants, p.Name)
 
-	message := fmt.Sprintf("Participant %s left Chitty-Chat at Lamport time %d", p.Name, s.logicalClock)
-	log.Println(message)
+// 	message := fmt.Sprintf("Participant %s left Chitty-Chat at Lamport time %d", p.Name, s.logicalClock)
+// 	log.Println(message)
 
-	return &pb.JoinLeaveResponse{
-		Message:   message,
-		Timestamp: s.logicalClock,
-	}, nil
-}
+// 	return &pb.JoinLeaveResponse{
+// 		Message:   message,
+// 		Timestamp: s.logicalClock,
+// 	}, nil
+// }
