@@ -14,6 +14,7 @@ project
 └───chittychatpb
 │   │   chitty_chat.pb.go
 │   │   chitty_chat_grpc.pb.go
+└───└─────────────────────────
 ```
 
 Run the clientside part of the program
