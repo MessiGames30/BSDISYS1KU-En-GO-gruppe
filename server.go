@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"google.golang.org/grpc"
+	"io"
 	"log"
 	"net"
 	"sync"
@@ -14,6 +15,7 @@ type server struct {
 	pb.UnimplementedChittyChatServer
 	participants map[string]int64
 	messages     []*pb.BroadcastMessage
+	clients      map[string]chan *pb.BroadcastMessage // Channel for each client to send messages
 	mu           sync.Mutex
 	logicalClock int64
 }
@@ -26,10 +28,12 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer()
-	pb.RegisterChittyChatServer(grpcServer, &server{
+	s := &server{
 		participants: make(map[string]int64),
 		messages:     []*pb.BroadcastMessage{},
-	})
+		clients:      make(map[string]chan *pb.BroadcastMessage), // Initialize the map for client channels
+	}
+	pb.RegisterChittyChatServer(grpcServer, s)
 
 	fmt.Println("Server is running on port 50051...")
 	if err := grpcServer.Serve(lis); err != nil {
@@ -45,7 +49,7 @@ func (s *server) PublishMessage(ctx context.Context, msg *pb.ChatMessage) (*pb.E
 	// Increment the logical clock for each new message
 	s.logicalClock++
 
-	// Broadcast message to all participants
+	// Create a broadcast message with the logical timestamp
 	broadcast := &pb.BroadcastMessage{
 		Participant: msg.Participant,
 		Message:     msg.Message,
@@ -53,21 +57,51 @@ func (s *server) PublishMessage(ctx context.Context, msg *pb.ChatMessage) (*pb.E
 	}
 	s.messages = append(s.messages, broadcast)
 
+	// Log the message
 	log.Printf("Message from %s: %s (Timestamp: %d)", msg.Participant, msg.Message, s.logicalClock)
+
+	// Broadcast the message to all connected clients
+	for name, ch := range s.clients {
+		log.Printf("Sending message to client %s", name)
+		ch <- broadcast
+	}
+
 	return &pb.Empty{}, nil
 }
 
 // BroadcastMessages - stream messages to connected clients
 func (s *server) BroadcastMessages(_ *pb.Empty, stream pb.ChittyChat_BroadcastMessagesServer) error {
+	clientID := fmt.Sprintf("client-%d", len(s.clients)+1) // Unique ID for each client
+
+	// Create a message channel for the client
+	msgCh := make(chan *pb.BroadcastMessage, 100)
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.clients[clientID] = msgCh // Store client stream channel
+	s.mu.Unlock()
 
-	for _, msg := range s.messages {
-		if err := stream.Send(msg); err != nil {
-			return err
+	// Start a goroutine to send messages from the channel to the client
+	go func() {
+		for msg := range msgCh {
+			if err := stream.Send(msg); err != nil {
+				if err == io.EOF || err.Error() == "transport is closing" {
+					log.Printf("Client %s disconnected", clientID)
+					break
+				}
+				log.Printf("Error sending message to client %s: %v", clientID, err)
+			}
 		}
-	}
+	}()
 
+	// Wait for the client to disconnect (block until done)
+	<-stream.Context().Done()
+
+	// Remove client from active clients
+	s.mu.Lock()
+	delete(s.clients, clientID)
+	s.mu.Unlock()
+
+	log.Printf("Client %s disconnected", clientID)
+	close(msgCh) // Close the message channel
 	return nil
 }
 
