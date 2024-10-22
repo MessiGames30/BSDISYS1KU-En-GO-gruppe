@@ -8,11 +8,12 @@ import (
 	"time"
 
 	pb "Chitty-Chat_HW3_V2/chittychatpb"
+
 	"google.golang.org/grpc"
 )
 
 func main() {
-	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
+	conn, err := grpc.NewClient("localhost:50051")
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
@@ -27,6 +28,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Could not join: %v", err)
 	}
+
 	log.Println(joinResp.Message)
 
 	for scanner.Scan() {
