@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package chittychat;
+
+// Define Go package path for the generated code
+option go_package = "chittychatpb";
+
+service ChittyChat {
+  rpc PublishMessage (ChatMessage) returns (Empty);
+  rpc BroadcastMessages (Empty) returns (stream BroadcastMessage);
+  rpc JoinChat (Participant) returns (JoinLeaveResponse);
+  rpc LeaveChat (Participant) returns (JoinLeaveResponse);
+}
+
+message ChatMessage {
+  string participant = 1;
+  string message = 2;
+  int64 timestamp = 3;
+}
+
+message BroadcastMessage {
+  string participant = 1;
+  string message = 2;
+  int64 timestamp = 3;
+}
+
+message Participant {
+  string name = 1;
+}
+
+message JoinLeaveResponse {
+  string message = 1;
+  int64 timestamp = 2;
+}
+
+message Empty {}
