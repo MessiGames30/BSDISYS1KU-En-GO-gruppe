@@ -33,7 +33,7 @@ go run server.go
 | R4 |  |
 | R5 |  |
 | R6 |  |
-| R7 |  |
+| R7 | x |
 | R8 |  |
 
 -   R1: Chitty-Chat is a distributed service, that enables its clients to chat. The service is using gRPC for communication. You have to design the API, including gRPC methods and data types.
