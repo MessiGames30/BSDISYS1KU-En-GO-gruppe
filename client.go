@@ -14,7 +14,7 @@ import (
 
 func main() {
 	const maxMessageLength = 128
-	conn, err := grpc.NewClient("localhost:50051")
+	conn, err := grpc.NewClient("localhost:50051", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
