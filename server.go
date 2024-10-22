@@ -114,8 +114,22 @@ func (s *server) JoinChat(ctx context.Context, p *pb.Participant) (*pb.JoinLeave
 	s.logicalClock++
 	s.participants[p.Name] = s.logicalClock
 
+	// Log the join event
 	message := fmt.Sprintf("Participant %s joined Chitty-Chat at Lamport time %d", p.Name, s.logicalClock)
 	log.Println(message)
+
+	// Create a broadcast message for the join event
+	broadcast := &pb.BroadcastMessage{
+		Participant: p.Name,
+		Message:     "joined the chat",
+		Timestamp:   s.logicalClock,
+	}
+
+	// Broadcast the join event to all clients
+	for name, ch := range s.clients {
+		log.Printf("Notifying client %s about new participant %s", name, p.Name)
+		ch <- broadcast
+	}
 
 	return &pb.JoinLeaveResponse{
 		Message:   message,
@@ -128,11 +142,26 @@ func (s *server) LeaveChat(ctx context.Context, p *pb.Participant) (*pb.JoinLeav
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Increment logical clock on leave
 	s.logicalClock++
 	delete(s.participants, p.Name)
 
+	// Log the leave event
 	message := fmt.Sprintf("Participant %s left Chitty-Chat at Lamport time %d", p.Name, s.logicalClock)
 	log.Println(message)
+
+	// Create a broadcast message for the leave event
+	broadcast := &pb.BroadcastMessage{
+		Participant: p.Name,
+		Message:     "left the chat",
+		Timestamp:   s.logicalClock,
+	}
+
+	// Broadcast the leave event to all clients
+	for name, ch := range s.clients {
+		log.Printf("Notifying client %s about participant %s leaving", name, p.Name)
+		ch <- broadcast
+	}
 
 	return &pb.JoinLeaveResponse{
 		Message:   message,
