@@ -1,13 +1,28 @@
+
 # BSDISYS1KU-En-GO-gruppe
 **Run the program**
 
+Open terminal session and cd to project
+```
+project
+│   README.md
+│   server.go
+│   client.go
+│   go.mod
+│   go.sum
+│   chitty_chat.proto
+└───chittychatpb
+│   │   chitty_chat.pb.go
+│   │   chitty_chat_grpc.pb.go
+```
+
 Run the clientside part of the program
 ```
-Meow meow meow meow meow
+go run client.go
 ```
 Run the serverside part of the program
 ```
-Meow meow meow meow meow
+go run server.go
 ```
 
 | System Requirements |  |
