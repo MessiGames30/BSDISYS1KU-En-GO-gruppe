@@ -30,12 +30,12 @@ go run server.go
 |--|--|
 | R1 | x |
 | R2 | x |
-| R3 |  |
-| R4 |  |
-| R5 |  |
-| R6 |  |
+| R3 | x |
+| R4 | x |
+| R5 | x |
+| R6 | x |
 | R7 | x |
-| R8 |  |
+| R8 | x |
 
 -   R1: Chitty-Chat is a distributed service, that enables its clients to chat. The service is using gRPC for communication. You have to design the API, including gRPC methods and data types.
 -   R2: Clients in Chitty-Chat can **Publish** a valid chat message at any time they wish. A valid message is a string of UTF-8 encoded text with a maximum length of 128 characters. A client **publishes** a message by making a gRPC call to Chitty-Chat.
