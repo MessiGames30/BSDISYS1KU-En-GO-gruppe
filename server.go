@@ -17,7 +17,7 @@ type server struct {
 	messages     []*pb.BroadcastMessage
 	clients      map[string]chan *pb.BroadcastMessage // Channel for each client to send messages
 	mu           sync.Mutex
-	logicalClock int64
+	lamportTime  int64
 }
 
 // Start the server
@@ -47,21 +47,27 @@ func (s *server) PublishMessage(ctx context.Context, msg *pb.ChatMessage) (*pb.E
 	defer s.mu.Unlock()
 
 	// Increment the logical clock for each new message
-	s.logicalClock++
+	serverTick(msg.Timestamp, s)
 
 	// Create a broadcast message with the logical timestamp
 	broadcast := &pb.BroadcastMessage{
 		Participant: msg.Participant,
 		Message:     msg.Message,
-		Timestamp:   s.logicalClock,
+		Timestamp:   s.lamportTime,
 	}
 	s.messages = append(s.messages, broadcast)
 
 	// Log the message
-	log.Printf("Message from %s: %s (Timestamp: %d)", msg.Participant, msg.Message, s.logicalClock)
+	log.Printf("Message from %s: %s", msg.Participant, msg.Message)
 
 	// Broadcast the message to all connected clients
 	for name, ch := range s.clients {
+		serverTick(msg.Timestamp, s)
+		broadcast := &pb.BroadcastMessage{
+			Participant: msg.Participant,
+			Message:     msg.Message,
+			Timestamp:   s.lamportTime,
+		}
 		log.Printf("Sending message to client %s", name)
 		ch <- broadcast
 	}
@@ -111,29 +117,29 @@ func (s *server) JoinChat(ctx context.Context, p *pb.Participant) (*pb.JoinLeave
 	defer s.mu.Unlock()
 
 	// Increment logical clock on join
-	s.logicalClock++
-	s.participants[p.Name] = s.logicalClock
+	serverTick(p.Timestamp, s)
 
 	// Log the join event
-	message := fmt.Sprintf("Participant %s joined Chitty-Chat at Lamport time %d", p.Name, s.logicalClock)
+	message := fmt.Sprintf("Participant %s joined Chitty-Chat at Lamport time %d", p.Name, s.lamportTime)
 	log.Println(message)
-
-	// Create a broadcast message for the join event
-	broadcast := &pb.BroadcastMessage{
-		Participant: p.Name,
-		Message:     "joined the chat",
-		Timestamp:   s.logicalClock,
-	}
 
 	// Broadcast the join event to all clients
 	for name, ch := range s.clients {
+		// Increasing lamport time
+		serverTick(p.Timestamp, s)
+		// Create a broadcast message for the join event
+		broadcast := &pb.BroadcastMessage{
+			Participant: p.Name,
+			Message:     "joined the chat",
+			Timestamp:   s.lamportTime,
+		}
 		log.Printf("Notifying client %s about new participant %s", name, p.Name)
 		ch <- broadcast
 	}
 
 	return &pb.JoinLeaveResponse{
 		Message:   message,
-		Timestamp: s.logicalClock,
+		Timestamp: s.lamportTime,
 	}, nil
 }
 
@@ -143,28 +149,38 @@ func (s *server) LeaveChat(ctx context.Context, p *pb.Participant) (*pb.JoinLeav
 	defer s.mu.Unlock()
 
 	// Increment logical clock on leave
-	s.logicalClock++
+	serverTick(p.Timestamp, s)
 	delete(s.participants, p.Name)
 
 	// Log the leave event
-	message := fmt.Sprintf("Participant %s left Chitty-Chat at Lamport time %d", p.Name, s.logicalClock)
+	message := fmt.Sprintf("Participant %s left Chitty-Chat at Lamport time %d", p.Name, s.lamportTime)
 	log.Println(message)
-
-	// Create a broadcast message for the leave event
-	broadcast := &pb.BroadcastMessage{
-		Participant: p.Name,
-		Message:     "left the chat",
-		Timestamp:   s.logicalClock,
-	}
 
 	// Broadcast the leave event to all clients
 	for name, ch := range s.clients {
+		serverTick(p.Timestamp, s)
+		// Create a broadcast message for the leave event
+		broadcast := &pb.BroadcastMessage{
+			Participant: p.Name,
+			Message:     "left the chat",
+			Timestamp:   s.lamportTime,
+		}
 		log.Printf("Notifying client %s about participant %s leaving", name, p.Name)
 		ch <- broadcast
 	}
 
 	return &pb.JoinLeaveResponse{
 		Message:   message,
-		Timestamp: s.logicalClock,
+		Timestamp: s.lamportTime,
 	}, nil
+}
+
+func serverTick(recivedTime int64, s *server) int64 {
+	tempTime := s.lamportTime
+	if recivedTime > s.lamportTime {
+		s.lamportTime = recivedTime
+	}
+	s.lamportTime++
+	log.Printf("Server lamport time from: %d to %d", tempTime, s.lamportTime)
+	return s.lamportTime
 }

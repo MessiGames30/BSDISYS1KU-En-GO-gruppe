@@ -1,18 +1,18 @@
 package main
 
 import (
+	pb "Chitty-Chat_HW3_V2/chittychatpb"
 	"bufio"
 	"context"
 	"fmt"
 	"log"
 	"os"
-	"time"
-
-	pb "Chitty-Chat_HW3_V2/chittychatpb"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+var lamportTime int64
 
 func main() {
 	const maxMessageLength = 128
@@ -31,11 +31,13 @@ func main() {
 	name := scanner.Text()
 
 	// Join the chat
-	joinResp, err := client.JoinChat(context.Background(), &pb.Participant{Name: name})
+	clientTick(0)
+	joinResp, err := client.JoinChat(context.Background(), &pb.Participant{Name: name, Timestamp: lamportTime})
 	if err != nil {
 		log.Fatalf("Could not join: %v", err)
 	}
 	log.Println(joinResp.Message)
+	clientTick(joinResp.Timestamp)
 
 	// Start a goroutine to receive messages from the server
 	go func() {
@@ -49,7 +51,8 @@ func main() {
 			if err != nil {
 				log.Fatalf("Error receiving message: %v", err)
 			}
-			log.Printf("[Broadcast] %s: %s (Timestamp: %d)", msg.Participant, msg.Message, msg.Timestamp)
+			clientTick(msg.Timestamp)
+			log.Printf("[Broadcast] %s: %s", msg.Participant, msg.Message)
 		}
 	}()
 
@@ -64,10 +67,11 @@ func main() {
 			continue
 		}
 
+		clientTick(0)
 		_, err = client.PublishMessage(context.Background(), &pb.ChatMessage{
 			Participant: name,
 			Message:     text,
-			Timestamp:   time.Now().Unix(),
+			Timestamp:   lamportTime,
 		})
 		if err != nil {
 			log.Fatalf("Could not publish message: %v", err)
@@ -75,9 +79,20 @@ func main() {
 	}
 
 	// Leave the chat
-	leaveResp, err := client.LeaveChat(context.Background(), &pb.Participant{Name: name})
+	leaveResp, err := client.LeaveChat(context.Background(), &pb.Participant{Name: name, Timestamp: lamportTime})
 	if err != nil {
 		log.Fatalf("Could not leave: %v", err)
 	}
+	clientTick(leaveResp.Timestamp)
 	log.Println(leaveResp.Message)
+}
+
+func clientTick(recivedTime int64) int64 {
+	tempTime := lamportTime
+	if recivedTime > lamportTime {
+		lamportTime = recivedTime
+	}
+	lamportTime++
+	log.Printf("Client lamport time from: %d to %d", tempTime, lamportTime)
+	return lamportTime
 }
